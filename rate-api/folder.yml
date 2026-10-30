@@ -1,0 +1,104 @@
+info:
+  name: Rate API (model)
+  type: folder
+  seq: 3
+
+request:
+  scripts:
+    - type: tests
+      code: |-
+        // Names the response the model sent, as the test's title, so the outcome is visible at a
+        // glance in the results. The model fails at random (~30% of calls), so every response it is
+        // known to send passes. Only a rejected token, an exhausted quota or an unknown shape fails.
+        const status = res.getStatus();
+        const body = res.getBody();
+        const tokenHeader = req.getHeader("token");
+        const sentConfiguredToken = tokenHeader === bru.getEnvVar("rateApiToken") || tokenHeader === "{{rateApiToken}}";
+        const isHtml = typeof body === "string" && body.toLowerCase().includes("<!doctype html>");
+
+        // Flask answers some errors with HTML pages; their <title> or <p> says what happened.
+        function htmlText(html, tag) {
+          const match = html.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
+          return (match ? match[1] : "")
+            .replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+            .replace(/\/\/ Werkzeug Debugger/, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+
+        function describe() {
+          if (status === 200 && body && Array.isArray(body.rates)) {
+            const total = body.rates.length;
+            const missing = body.rates.filter((entry) => entry.rate === undefined).length;
+            if (total === 0) return { known: true, text: "200 OK: empty rates list" };
+            if (missing > 0) return { known: true, text: `200 OK but ${missing} of ${total} rates are missing (random failure)` };
+            const numbers = body.rates.filter((entry) => typeof entry.rate === "number").length;
+            const type = numbers === total ? "numbers" : numbers === 0 ? "strings" : `${numbers} numbers, ${total - numbers} strings`;
+            return { known: true, text: `200 OK: ${total} rates (as ${type})` };
+          }
+          if (status === 200 && body && body.status === "error") {
+            return { known: true, text: `200 OK with an error instead of rates (random failure): ${body.message}` };
+          }
+          if (status === 500 && body && body.error) return { known: true, text: `500 (random failure): ${body.error}` };
+          if (status === 500 && isHtml && body.includes("Werkzeug Debugger")) {
+            return { known: true, text: `500 HTML debugger page, the model crashed: ${htmlText(body, "title")}` };
+          }
+          if (status === 400 && body && body.error) return { known: true, text: `400 Bad Request: ${body.error}` };
+          if (status === 400 && isHtml) return { known: true, text: `400 Bad Request as an HTML page: ${htmlText(body, "p")}` };
+          if (status === 401) {
+            return sentConfiguredToken
+              ? { known: false, text: "401: the model rejected the configured rateApiToken" }
+              : { known: true, text: "401 Unauthorized (no valid token was sent)" };
+          }
+          if (status === 429) {
+            return { known: false, text: "429: the daily quota is exhausted; run `docker compose restart rate-api` to reset it" };
+          }
+          const raw = typeof body === "string" ? body : JSON.stringify(body);
+          return { known: false, text: `unexpected response: HTTP ${status} ${String(raw).slice(0, 200)}` };
+        }
+
+        const outcome = describe();
+        test(`model response: ${outcome.text}`, function () {
+          expect(outcome.known, outcome.text).to.equal(true);
+        });
+
+docs:
+  content: |-
+    # Rate API (model)
+
+    Direct calls to the dynamic pricing model (`POST /pricing`), bypassing the pricing service, so you can see the
+    model's **original, unmodified responses**. It runs in the `rate-api` container:
+
+    - from your machine (and Bruno): `http://localhost:8080` (the `rateApiUrl` environment variable)
+    - from inside Docker (the Rails service): `http://rate-api:8080`
+
+    ## What to expect
+
+    The model misbehaves on purpose. About 7 in 10 calls with a valid token return rates. The rest, at random:
+
+    | Response | Share of calls |
+    |---|---|
+    | `200` with `{"status": "error", "message": "Failed to process rates due to an intermittent issue."}` | ~5% |
+    | `200` where every entry is missing its `rate` | ~10% |
+    | `500 {"error": "An unexpected internal error occurred"}` | ~7% |
+    | No answer at all: Bruno gives up after 5 s with a timeout error | ~6% |
+
+    These random failures happen **before** the model validates the request, so even the invalid requests (05, 06,
+    09) sometimes get one of them instead of their usual error.
+
+    Each response uses one type for all its rates: usually numbers (`12000`), occasionally (roughly 1 response in 15)
+    strings (`"12000"`). The pricing service always returns integers.
+
+    The model runs Flask in **debug mode**: when it crashes (09), its error page is the Werkzeug interactive debugger.
+    The pricing service never forwards the model's response bodies to its users.
+
+    Every request's test is titled with the response that came back (e.g. `model response: 200 OK: 36 rates (as
+    numbers)`), and it passes for any response the model is known to send. The full raw body is in the Response pane.
+    Send a request a few times to see the different outcomes.
+
+    ## Quota
+
+    Every call with a valid token counts against the token's **1,000 calls/day**, including failures, timeouts and
+    `400`s. Calls rejected with `401` (07, 08) don't count. The pricing service uses the same token, so calls made here
+    reduce its budget too. Reset the quota with `docker compose restart rate-api`.
+  type: text/markdown

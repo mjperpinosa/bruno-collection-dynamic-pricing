@@ -1,0 +1,37 @@
+info:
+  name: 01 Price one room
+  type: http
+  seq: 1
+  tags:
+    - model
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: token
+      value: "{{rateApiToken}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "attributes": [
+          { "period": "Summer", "hotel": "FloatingPointResort", "room": "SingletonRoom" }
+        ]
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  The simplest call: one room. Usually returns
+
+  ```json
+  { "rates": [ { "hotel": "FloatingPointResort", "period": "Summer", "rate": "73400", "room": "SingletonRoom" } ] }
+  ```
+
+  The rate is random on every call, and sometimes a number instead of a string. See the folder docs for the random
+  failures this call can also return.

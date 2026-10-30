@@ -1,0 +1,41 @@
+info:
+  name: 06 Malformed JSON body
+  type: http
+  seq: 6
+  tags:
+    - model
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: token
+      value: "{{rateApiToken}}"
+    - name: Content-Type
+      value: application/merge-patch+json
+  body:
+    type: text
+    data: '{"attributes": ['
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  Sends a body that isn't valid JSON. Usually returns HTTP `400` with an **HTML page** (Flask's default error page),
+  not JSON:
+
+  ```html
+  <!doctype html>
+  <html lang=en>
+  <title>400 Bad Request</title>
+  <h1>Bad Request</h1>
+  <p>Failed to decode JSON object: Expecting value: line 1 column 17 (char 16)</p>
+  ```
+
+  This is why the pricing service treats any response that isn't valid JSON as an upstream error.
+
+  **Why `application/merge-patch+json` instead of `application/json`?** With exactly `application/json`, Bruno's HTTP
+  client (axios) "fixes" text that isn't valid JSON by sending it as a JSON string (`"{\"attributes\": ["`), so the
+  model would never see malformed JSON (that case is request 09). The model's framework, Flask, treats any
+  `application/*+json` type as JSON, so this one delivers the broken text unchanged.

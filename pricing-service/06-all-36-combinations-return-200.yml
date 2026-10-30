@@ -1,0 +1,75 @@
+info:
+  name: 06 All 36 combinations return 200
+  type: http
+  seq: 6
+  tags:
+    - smoke
+
+http:
+  method: GET
+  url: "{{pricingServiceUrl}}/api/v1/pricing?period=Autumn&hotel=RecursionRetreat&room=RestfulKing"
+  params:
+    - name: period
+      value: Autumn
+      type: query
+    - name: hotel
+      value: RecursionRetreat
+      type: query
+    - name: room
+      value: RestfulKing
+      type: query
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // Request every period x hotel x room combination and record each status and rate.
+        const periods = ["Summer", "Autumn", "Winter", "Spring"];
+        const hotels = ["FloatingPointResort", "GitawayHotel", "RecursionRetreat"];
+        const rooms = ["SingletonRoom", "BooleanTwin", "RestfulKing"];
+        const baseUrl = `${bru.getEnvVar("pricingServiceUrl")}/api/v1/pricing`;
+        const results = [];
+
+        for (const period of periods) {
+          for (const hotel of hotels) {
+            for (const room of rooms) {
+              const url = `${baseUrl}?period=${period}&hotel=${hotel}&room=${room}`;
+              try {
+                const response = await bru.sendRequest({ method: "GET", url, timeout: 15000 });
+                results.push({ period, hotel, room, status: response.status, rate: response.data && response.data.rate });
+              } catch (err) {
+                // bru.sendRequest throws on non-2xx; Safe Mode puts the status on `err.status`.
+                const status = err && err.response ? err.response.status : err && err.status;
+                const error = err && err.response && err.response.data ? err.response.data.error : err && err.message;
+                results.push({ period, hotel, room, status: status || "no response", error });
+              }
+            }
+          }
+        }
+
+        bru.setVar("combinationResults", JSON.stringify(results));
+    - type: tests
+      code: |-
+        const results = JSON.parse(bru.getVar("combinationResults") || "[]");
+
+        test("requested all 36 combinations", function () {
+          expect(results).to.have.lengthOf(36);
+        });
+
+        results.forEach(function (result) {
+          test(`${result.period} / ${result.hotel} / ${result.room} returns HTTP 200`, function () {
+            expect(result.status, result.error).to.equal(200);
+            expect(Number.isInteger(result.rate), `got ${JSON.stringify(result.rate)}`).to.equal(true);
+          });
+        });
+
+        test("this request returns HTTP 200", function () {
+          expect(res.status).to.equal(200);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 15000
+
+docs: |-
+  Requests all 36 `period x hotel x room` combinations (from the script) and reports one test per combination.

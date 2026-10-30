@@ -1,0 +1,40 @@
+info:
+  name: 04 Get rate - Spring, RecursionRetreat, BooleanTwin
+  type: http
+  seq: 4
+  tags:
+    - smoke
+
+http:
+  method: GET
+  url: "{{pricingServiceUrl}}/api/v1/pricing?period=Spring&hotel=RecursionRetreat&room=BooleanTwin"
+  params:
+    - name: period
+      value: Spring
+      type: query
+    - name: hotel
+      value: RecursionRetreat
+      type: query
+    - name: room
+      value: BooleanTwin
+      type: query
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns HTTP 200", function () {
+          expect(res.status).to.equal(200);
+        });
+
+        test("returns JSON", function () {
+          expect(res.headers["content-type"]).to.include("application/json");
+        });
+
+        test("rate is a whole number", function () {
+          expect(Number.isInteger(res.body.rate), `got ${JSON.stringify(res.body.rate)}`).to.equal(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 15000

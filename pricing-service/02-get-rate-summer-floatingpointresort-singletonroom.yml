@@ -1,0 +1,40 @@
+info:
+  name: 02 Get rate - Summer, FloatingPointResort, SingletonRoom
+  type: http
+  seq: 2
+  tags:
+    - smoke
+
+http:
+  method: GET
+  url: "{{pricingServiceUrl}}/api/v1/pricing?period=Summer&hotel=FloatingPointResort&room=SingletonRoom"
+  params:
+    - name: period
+      value: Summer
+      type: query
+    - name: hotel
+      value: FloatingPointResort
+      type: query
+    - name: room
+      value: SingletonRoom
+      type: query
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns HTTP 200", function () {
+          expect(res.status).to.equal(200);
+        });
+
+        test("returns JSON", function () {
+          expect(res.headers["content-type"]).to.include("application/json");
+        });
+
+        test("rate is a whole number", function () {
+          expect(Number.isInteger(res.body.rate), `got ${JSON.stringify(res.body.rate)}`).to.equal(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 15000

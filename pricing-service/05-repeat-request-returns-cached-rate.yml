@@ -1,0 +1,55 @@
+info:
+  name: 05 Repeat request returns the cached rate
+  type: http
+  seq: 5
+  tags:
+    - smoke
+
+http:
+  method: GET
+  url: "{{pricingServiceUrl}}/api/v1/pricing?period=Autumn&hotel=GitawayHotel&room=SingletonRoom"
+  params:
+    - name: period
+      value: Autumn
+      type: query
+    - name: hotel
+      value: GitawayHotel
+      type: query
+    - name: room
+      value: SingletonRoom
+      type: query
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // The model returns a different random rate on every call, so two identical answers
+        // in a row show that the second one came from the service's cache.
+        const url = `${bru.getEnvVar("pricingServiceUrl")}/api/v1/pricing?period=Autumn&hotel=GitawayHotel&room=SingletonRoom`;
+        try {
+          const first = await bru.sendRequest({ method: "GET", url, timeout: 15000 });
+          bru.setVar("firstAutumnRate", first.data.rate);
+        } catch (err) {
+          // bru.sendRequest throws on non-2xx; Safe Mode puts the status on `err.status`.
+          const status = err && err.response ? err.response.status : err && err.status;
+          bru.setVar("firstAutumnRate", `first request failed: ${status ? `HTTP ${status}` : err && err.message}`);
+        }
+    - type: tests
+      code: |-
+        test("returns HTTP 200", function () {
+          expect(res.status).to.equal(200);
+        });
+
+        test("returns the same rate as the previous request (served from cache)", function () {
+          expect(res.body.rate).to.equal(bru.getVar("firstAutumnRate"));
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 15000
+
+docs: |-
+  Sends the same request twice and expects the same rate both times. The pricing model returns a different random rate
+  on every call, so identical answers prove the second one came from the service's cache.
+
+  This can fail only if the service's scheduled refresh (every 4 minutes) happens between the two calls; rerun if so.

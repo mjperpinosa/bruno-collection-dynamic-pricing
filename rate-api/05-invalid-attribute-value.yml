@@ -1,0 +1,41 @@
+info:
+  name: 05 Invalid attribute value
+  type: http
+  seq: 5
+  tags:
+    - model
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: token
+      value: "{{rateApiToken}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "attributes": [
+          { "period": "Summer", "hotel": "FloatingPointResort", "room": "SingletonRoom" },
+          { "period": "Bogus", "hotel": "FloatingPointResort", "room": "SingletonRoom" }
+        ]
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  One valid room and one invalid period. Usually returns
+
+  ```json
+  { "error": "Invalid attribute: {'period': 'Bogus', 'hotel': 'FloatingPointResort', 'room': 'SingletonRoom'}" }
+  ```
+
+  with HTTP `400`. One bad entry rejects the whole batch, so the valid room isn't priced either. The message uses
+  Python's dict syntax, not JSON. This is one reason the pricing service never forwards the model's error text to its
+  users.
+
+  It counts against the daily quota, and like every call it can also get one of the random failures instead.

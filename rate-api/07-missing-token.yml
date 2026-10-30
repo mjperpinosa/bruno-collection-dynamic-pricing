@@ -1,0 +1,42 @@
+info:
+  name: 07 Missing token
+  type: http
+  seq: 7
+  tags:
+    - model
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "attributes": [
+          { "period": "Summer", "hotel": "FloatingPointResort", "room": "SingletonRoom" }
+        ]
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns HTTP 401", function () {
+          expect(res.status).to.equal(401);
+        });
+
+        test("says Unauthorized", function () {
+          expect(res.body.error).to.equal("Unauthorized");
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  No `token` header. Always returns `401 {"error": "Unauthorized"}`. The token is checked before anything else, so
+  this response is deterministic (none of the random failures). It doesn't count against the daily quota, and it's
+  still answered after the quota is exhausted.

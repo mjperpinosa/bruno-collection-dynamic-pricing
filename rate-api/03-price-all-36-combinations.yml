@@ -1,0 +1,68 @@
+info:
+  name: 03 Price all 36 combinations (what the pricing service sends)
+  type: http
+  seq: 3
+  tags:
+    - model
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: token
+      value: "{{rateApiToken}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "attributes": [
+          {"period": "Summer", "hotel": "FloatingPointResort", "room": "SingletonRoom"},
+          {"period": "Summer", "hotel": "FloatingPointResort", "room": "BooleanTwin"},
+          {"period": "Summer", "hotel": "FloatingPointResort", "room": "RestfulKing"},
+          {"period": "Summer", "hotel": "GitawayHotel", "room": "SingletonRoom"},
+          {"period": "Summer", "hotel": "GitawayHotel", "room": "BooleanTwin"},
+          {"period": "Summer", "hotel": "GitawayHotel", "room": "RestfulKing"},
+          {"period": "Summer", "hotel": "RecursionRetreat", "room": "SingletonRoom"},
+          {"period": "Summer", "hotel": "RecursionRetreat", "room": "BooleanTwin"},
+          {"period": "Summer", "hotel": "RecursionRetreat", "room": "RestfulKing"},
+          {"period": "Autumn", "hotel": "FloatingPointResort", "room": "SingletonRoom"},
+          {"period": "Autumn", "hotel": "FloatingPointResort", "room": "BooleanTwin"},
+          {"period": "Autumn", "hotel": "FloatingPointResort", "room": "RestfulKing"},
+          {"period": "Autumn", "hotel": "GitawayHotel", "room": "SingletonRoom"},
+          {"period": "Autumn", "hotel": "GitawayHotel", "room": "BooleanTwin"},
+          {"period": "Autumn", "hotel": "GitawayHotel", "room": "RestfulKing"},
+          {"period": "Autumn", "hotel": "RecursionRetreat", "room": "SingletonRoom"},
+          {"period": "Autumn", "hotel": "RecursionRetreat", "room": "BooleanTwin"},
+          {"period": "Autumn", "hotel": "RecursionRetreat", "room": "RestfulKing"},
+          {"period": "Winter", "hotel": "FloatingPointResort", "room": "SingletonRoom"},
+          {"period": "Winter", "hotel": "FloatingPointResort", "room": "BooleanTwin"},
+          {"period": "Winter", "hotel": "FloatingPointResort", "room": "RestfulKing"},
+          {"period": "Winter", "hotel": "GitawayHotel", "room": "SingletonRoom"},
+          {"period": "Winter", "hotel": "GitawayHotel", "room": "BooleanTwin"},
+          {"period": "Winter", "hotel": "GitawayHotel", "room": "RestfulKing"},
+          {"period": "Winter", "hotel": "RecursionRetreat", "room": "SingletonRoom"},
+          {"period": "Winter", "hotel": "RecursionRetreat", "room": "BooleanTwin"},
+          {"period": "Winter", "hotel": "RecursionRetreat", "room": "RestfulKing"},
+          {"period": "Spring", "hotel": "FloatingPointResort", "room": "SingletonRoom"},
+          {"period": "Spring", "hotel": "FloatingPointResort", "room": "BooleanTwin"},
+          {"period": "Spring", "hotel": "FloatingPointResort", "room": "RestfulKing"},
+          {"period": "Spring", "hotel": "GitawayHotel", "room": "SingletonRoom"},
+          {"period": "Spring", "hotel": "GitawayHotel", "room": "BooleanTwin"},
+          {"period": "Spring", "hotel": "GitawayHotel", "room": "RestfulKing"},
+          {"period": "Spring", "hotel": "RecursionRetreat", "room": "SingletonRoom"},
+          {"period": "Spring", "hotel": "RecursionRetreat", "room": "BooleanTwin"},
+          {"period": "Spring", "hotel": "RecursionRetreat", "room": "RestfulKing"}
+        ]
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  Exactly the request the pricing service sends when it refreshes its cache: every `period x hotel x room`
+  combination in one batch. It's as fast as pricing one room (~5 ms). When it succeeds, `rates` has all 36 entries in
+  request order. When rates are missing, they're usually missing for all 36 entries at once, and the service then
+  rejects the whole response.

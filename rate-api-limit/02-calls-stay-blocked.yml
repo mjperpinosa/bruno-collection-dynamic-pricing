@@ -1,0 +1,43 @@
+info:
+  name: 02 Calls stay blocked after the limit
+  type: http
+  seq: 2
+  tags:
+    - quota
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "attributes": [
+          { "period": "Winter", "hotel": "GitawayHotel", "room": "RestfulKing" },
+          { "period": "Spring", "hotel": "RecursionRetreat", "room": "BooleanTwin" }
+        ]
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        const limit = Number(bru.getEnvVar("rateApiDailyLimit"));
+
+        test("returns HTTP 429", function () {
+          expect(res.status).to.equal(429);
+        });
+
+        test("explains the daily limit", function () {
+          expect(res.body.error).to.equal(`Rate limit exceeded (${limit}/day)`);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  After the quota is used up, every call is refused, whatever it asks for. Run **01 Exhaust the daily quota** first.

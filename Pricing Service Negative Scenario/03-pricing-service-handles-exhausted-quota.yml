@@ -1,0 +1,52 @@
+info:
+  name: 03 Pricing service handles the exhausted quota
+  type: http
+  seq: 3
+  tags:
+    - quota
+
+http:
+  method: GET
+  url: "{{pricingServiceUrl}}/api/v1/pricing?period=Summer&hotel=FloatingPointResort&room=SingletonRoom"
+  params:
+    - name: period
+      value: Summer
+      type: query
+    - name: hotel
+      value: FloatingPointResort
+      type: query
+    - name: room
+      value: SingletonRoom
+      type: query
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        // With the model refusing every call, the service either still has valid cached rates (200)
+        // or explains that the model's quota is exhausted (503 + Retry-After). Never a 500.
+        test("returns 200 from cache or 503, never a server error", function () {
+          expect(res.status).to.be.oneOf([200, 503]);
+        });
+
+        if (res.status === 200) {
+          test("cached rate is a whole number", function () {
+            expect(Number.isInteger(res.body.rate), `got ${JSON.stringify(res.body.rate)}`).to.equal(true);
+          });
+        } else if (res.status === 503) {
+          test("503 explains that the model's quota is exhausted", function () {
+            expect(res.body.error).to.include("daily request quota is exhausted");
+          });
+
+          test("503 tells the client when to retry", function () {
+            expect(Number(res.headers["retry-after"])).to.be.above(0);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 15000
+
+docs: |-
+  Calls the pricing service after the model's quota is gone. Expect `200` while its cached rates are still valid
+  (they last up to 5 minutes), then `503` with `Retry-After` and a message saying the model's daily quota is exhausted.

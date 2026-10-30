@@ -1,0 +1,137 @@
+info:
+  name: 01 Exhaust the daily quota
+  type: http
+  seq: 1
+  tags:
+    - quota
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "attributes": [
+          { "period": "Summer", "hotel": "FloatingPointResort", "room": "SingletonRoom" }
+        ]
+      }
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // Call the model until it starts answering 429, counting every outcome. This request then
+        // sends the next call, which should be rejected. ~10% of calls hang, so each gets a timeout.
+        const limit = Number(bru.getEnvVar("rateApiDailyLimit"));
+        const maxCalls = limit + 50; // stop eventually even if the limit is never enforced
+        const call = {
+          method: "POST",
+          url: `${bru.getEnvVar("rateApiUrl")}/pricing`,
+          headers: { "Content-Type": "application/json", token: bru.getEnvVar("rateApiToken") },
+          data: { attributes: [{ period: "Summer", hotel: "FloatingPointResort", room: "SingletonRoom" }] },
+          timeout: 1000,
+        };
+
+        // bru.sendRequest throws on non-2xx. In Safe Mode the error has only `status`;
+        // timeouts have code ECONNABORTED and no status.
+        async function send() {
+          try {
+            const response = await bru.sendRequest(call);
+            return { status: response.status, data: response.data };
+          } catch (err) {
+            if (err && err.response) return { status: err.response.status, data: err.response.data };
+            if (err && typeof err.status === "number") return { status: err.status };
+            if (err && (err.code === "ECONNABORTED" || err.code === "ETIMEDOUT" || /timeout/i.test(String(err.message)))) {
+              return { status: "timeout" };
+            }
+            throw err; // model unreachable: fail loudly instead of counting it
+          }
+        }
+
+        const counts = { withRates: 0, okWithoutRates: 0, serverError: 0, timeout: 0, other: 0 };
+        let callsBeforeLimit = 0;
+        let limitHit = false;
+        const startedAt = Date.now();
+
+        while (callsBeforeLimit < maxCalls) {
+          const { status, data } = await send();
+          if (status === 429) {
+            limitHit = true;
+            break;
+          }
+
+          callsBeforeLimit += 1;
+          if (status === 200) {
+            const hasRate = Boolean(data && Array.isArray(data.rates) && data.rates[0] && data.rates[0].rate !== undefined);
+            hasRate ? counts.withRates++ : counts.okWithoutRates++;
+          } else if (status === "timeout") {
+            counts.timeout++;
+          } else if (status >= 500) {
+            counts.serverError++;
+          } else {
+            counts.other++;
+          }
+          if (callsBeforeLimit % 100 === 0) console.log(`${callsBeforeLimit} calls so far`, counts);
+        }
+
+        const summary = { limitHit, callsBeforeLimit, counts, seconds: Math.round((Date.now() - startedAt) / 1000) };
+        console.log("Quota probe summary", summary);
+        bru.setVar("quotaProbe", JSON.stringify(summary));
+    - type: tests
+      code: |-
+        const limit = Number(bru.getEnvVar("rateApiDailyLimit"));
+        const probe = JSON.parse(bru.getVar("quotaProbe") || "{}");
+        const counts = probe.counts || {};
+        const failedCalls = (counts.okWithoutRates || 0) + (counts.serverError || 0) + (counts.timeout || 0) + (counts.other || 0);
+
+        test("the model starts refusing calls once the daily quota is used up", function () {
+          expect(probe.limitHit, `no 429 after ${probe.callsBeforeLimit} calls`).to.equal(true);
+        });
+
+        test("the next call is rejected with HTTP 429", function () {
+          expect(res.status).to.equal(429);
+        });
+
+        test("the 429 explains the daily limit", function () {
+          expect(res.body.error).to.equal(`Rate limit exceeded (${limit}/day)`);
+        });
+
+        // Some calls may already have been used today (when the whole collection runs, the Pricing
+        // Service and Rate API (model) folders go first), so allow a small number of earlier calls.
+        const alreadyUsedAllowance = 20;
+
+        test(`the limit trips at the ${limit}th call of the day`, function () {
+          const alreadyUsed = limit - probe.callsBeforeLimit;
+          expect(probe.callsBeforeLimit).to.be.within(
+            limit - alreadyUsedAllowance,
+            limit,
+            `${alreadyUsed} calls were already used today; restart rate-api for a fresh quota`
+          );
+        });
+
+        test("failed and timed-out calls count against the quota too", function () {
+          // If failed calls were free, the limit could only trip after `limit` successful calls,
+          // i.e. after more than `limit` calls in total, given this many failures.
+          expect(failedCalls, "no failed calls happened in this run").to.be.above(alreadyUsedAllowance);
+          expect(probe.callsBeforeLimit).to.be.at.most(limit);
+          expect(counts.withRates).to.be.below(limit - alreadyUsedAllowance);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  Sends calls from the script until the model answers `429`, then sends this request, which must also get `429`.
+
+  The tests check:
+  - the limit is enforced, with a clear error message;
+  - it trips at the 1,000th call of the day (`rateApiDailyLimit`). Up to 20 calls already spent today are tolerated;
+    beyond that, restart `rate-api` for a fresh quota;
+  - failed calls (HTTP 500, `200` without rates, timeouts) count against the quota too.
+
+  Open the **Timeline** to see the individual calls; the console logs a summary of outcomes.

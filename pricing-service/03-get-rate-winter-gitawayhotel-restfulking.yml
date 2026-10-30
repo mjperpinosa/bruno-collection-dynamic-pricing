@@ -1,0 +1,40 @@
+info:
+  name: 03 Get rate - Winter, GitawayHotel, RestfulKing
+  type: http
+  seq: 3
+  tags:
+    - smoke
+
+http:
+  method: GET
+  url: "{{pricingServiceUrl}}/api/v1/pricing?period=Winter&hotel=GitawayHotel&room=RestfulKing"
+  params:
+    - name: period
+      value: Winter
+      type: query
+    - name: hotel
+      value: GitawayHotel
+      type: query
+    - name: room
+      value: RestfulKing
+      type: query
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns HTTP 200", function () {
+          expect(res.status).to.equal(200);
+        });
+
+        test("returns JSON", function () {
+          expect(res.headers["content-type"]).to.include("application/json");
+        });
+
+        test("rate is a whole number", function () {
+          expect(Number.isInteger(res.body.rate), `got ${JSON.stringify(res.body.rate)}`).to.equal(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 15000

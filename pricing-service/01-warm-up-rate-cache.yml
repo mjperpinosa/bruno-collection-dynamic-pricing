@@ -1,0 +1,76 @@
+info:
+  name: 01 Warm up the rate cache
+  type: http
+  seq: 1
+  tags:
+    - smoke
+
+http:
+  method: GET
+  url: "{{pricingServiceUrl}}/api/v1/pricing?period=Summer&hotel=FloatingPointResort&room=SingletonRoom"
+  params:
+    - name: period
+      value: Summer
+      type: query
+    - name: hotel
+      value: FloatingPointResort
+      type: query
+    - name: room
+      value: SingletonRoom
+      type: query
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // When the service has no valid rates, it fetches them from the pricing model, which fails
+        // ~30% of the time. The service then answers 503 + Retry-After. Retry until the cache is warm.
+        const url = `${bru.getEnvVar("pricingServiceUrl")}/api/v1/pricing?period=Summer&hotel=FloatingPointResort&room=SingletonRoom`;
+        const maxAttempts = 5;
+
+        // bru.sendRequest throws on non-2xx. In Safe Mode the error has only `status`
+        // (no body or headers), so Retry-After is read only when `err.response` exists.
+        async function send() {
+          try {
+            const response = await bru.sendRequest({ method: "GET", url, timeout: 15000 });
+            return { status: response.status, headers: response.headers || {} };
+          } catch (err) {
+            if (err && err.response) return { status: err.response.status, headers: err.response.headers || {} };
+            if (err && typeof err.status === "number") return { status: err.status, headers: {} };
+            throw err;
+          }
+        }
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          const { status, headers } = await send();
+          if (status === 200) {
+            console.log(`Rate cache is warm (attempt ${attempt})`);
+            break;
+          }
+
+          const retryAfter = Number(headers["retry-after"] || 5);
+          console.log(`Attempt ${attempt}: HTTP ${status}, Retry-After ${retryAfter}s`);
+          // A long Retry-After means the model's quota is exhausted or throttled; waiting won't help.
+          if (attempt === maxAttempts || retryAfter > 10) break;
+          await bru.sleep(retryAfter * 1000);
+        }
+    - type: tests
+      code: |-
+        test("returns HTTP 200", function () {
+          expect(res.status).to.equal(200);
+        });
+
+        test("returns JSON", function () {
+          expect(res.headers["content-type"]).to.include("application/json");
+        });
+
+        test("rate is a whole number", function () {
+          expect(Number.isInteger(res.body.rate), `got ${JSON.stringify(res.body.rate)}`).to.equal(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 15000
+
+docs: |-
+  Waits until the service can serve rates (retrying on 503 and honouring `Retry-After`), then checks the response.

@@ -1,0 +1,34 @@
+info:
+  name: 02 Price several rooms
+  type: http
+  seq: 2
+  tags:
+    - model
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: token
+      value: "{{rateApiToken}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "attributes": [
+          { "period": "Summer", "hotel": "FloatingPointResort", "room": "SingletonRoom" },
+          { "period": "Autumn", "hotel": "FloatingPointResort", "room": "SingletonRoom" },
+          { "period": "Winter", "hotel": "FloatingPointResort", "room": "SingletonRoom" },
+          { "period": "Spring", "hotel": "FloatingPointResort", "room": "SingletonRoom" }
+        ]
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  The batch example from the model's Docker Hub documentation: one room, four periods, in one call. The response's
+  `rates` array has one entry per requested room, in request order, each with its own random `rate`.

@@ -1,0 +1,29 @@
+info:
+  name: 04 Empty attributes list
+  type: http
+  seq: 4
+  tags:
+    - model
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: token
+      value: "{{rateApiToken}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "attributes": []
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  Asks for nothing. Usually returns `200 {"rates": []}`. A body with no `attributes` key at all (`{}`) gets the same
+  answer. It still counts against the daily quota.

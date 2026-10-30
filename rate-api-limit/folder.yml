@@ -1,0 +1,33 @@
+info:
+  name: Rate API Limit
+  type: folder
+  seq: 4
+
+request:
+  headers:
+    - name: token
+      value: "{{rateApiToken}}"
+
+docs:
+  content: |-
+    # Rate API Limit
+
+    Calls the pricing model (`POST /pricing` on the `rate-api` container) directly to verify its daily limit:
+    **1,000 calls per token**, after which it answers `429 {"error": "Rate limit exceeded (1000/day)"}`.
+
+    > **Warning:** running this folder uses up the token's whole daily quota. Afterwards the pricing service can't
+    > refresh its rates, so the **Pricing Service** folder returns `503` once its cached rates expire (at most
+    > 5 minutes). Restore the quota by restarting the model:
+    >
+    > ```bash
+    > docker compose restart rate-api
+    > ```
+
+    **Restart `rate-api` before running this folder** (or the whole collection). The count test expects a fresh quota.
+    It tolerates up to 20 calls already spent today (by the **Pricing Service** and **Rate API (model)** folders when the
+    whole collection runs), but if more were used the limit trips earlier, and the test reports how many calls were
+    already used. Calls rejected with `401` don't count against the quota.
+
+    **01 Exhaust the daily quota** takes 1–3 minutes: ~10% of the model's calls hang, and each one waits for a
+    1-second timeout.
+  type: text/markdown

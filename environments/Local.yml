@@ -1,0 +1,14 @@
+name: Local
+variables:
+  - name: pricingServiceUrl
+    value: http://localhost:3000
+    description: The Rails pricing service (docker compose service `interview-dev`)
+  - name: rateApiUrl
+    value: http://localhost:8080
+    description: The dynamic pricing model (docker compose service `rate-api`)
+  - name: rateApiToken
+    value: 04aa6f42aa03f220c2ae9a276cd68c62
+    description: Public test token from the tripladev/rate-api Docker Hub page
+  - name: rateApiDailyLimit
+    value: "1000"
+    description: Calls the model accepts per day for one token

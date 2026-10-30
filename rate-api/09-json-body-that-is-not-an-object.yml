@@ -1,0 +1,38 @@
+info:
+  name: 09 JSON body that isn't an object (crashes the model)
+  type: http
+  seq: 9
+  tags:
+    - model
+
+http:
+  method: POST
+  url: "{{rateApiUrl}}/pricing"
+  headers:
+    - name: token
+      value: "{{rateApiToken}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '"just a string"'
+
+settings:
+  encodeUrl: true
+  timeout: 5000
+
+docs: |-
+  Sends valid JSON that is a string rather than an object. The model doesn't check the type before reading
+  `attributes` from it, so it usually **crashes** with `500`:
+
+  ```
+  AttributeError: 'str' object has no attribute 'get'
+  ```
+
+  Because the model runs Flask in debug mode, the response is the full **Werkzeug interactive debugger** HTML page: a
+  stack trace with internal file paths (e.g. `/usr/local/lib/python3.12/site-packages/flask/app.py`) and the
+  surrounding source lines. In a real deployment that would be a serious information leak. Open the Response pane to
+  see it.
+
+  This is a model bug, not a documented behaviour. The pricing service never sends such a body, and it treats any
+  non-JSON response as an upstream error.

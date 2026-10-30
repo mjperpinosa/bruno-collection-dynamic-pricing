@@ -1,0 +1,7 @@
+info:
+  name: Pricing Service Negative Scenario
+  type: folder
+  seq: 2
+
+request:
+  auth: inherit
